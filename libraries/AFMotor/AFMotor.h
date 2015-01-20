@@ -135,10 +135,18 @@
 */
 
 // Arduino pin names for interface to 74HCT595 latch
+#ifndef MOTORLATCH
 #define MOTORLATCH 12
+#endif
+#ifndef MOTORCLK
 #define MOTORCLK 4
+#endif
+#ifndef MOTORENABLE
 #define MOTORENABLE 7
+#endif
+#ifndef MOTORDATA
 #define MOTORDATA 8
+#endif
 
 class AFMotorController
 {
