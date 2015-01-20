@@ -161,7 +161,7 @@ void loop()
     if (Serial.available()) {
         uint8_t c = Serial.read();
         Serial.write(next_out);
-        next_out = c;
+        next_out = active ? 0x01 : 0x00;
 
         switch (state) {
         case STATE_BOGUS:
@@ -227,6 +227,7 @@ void loop()
             dotline |= c;
             if (line_index < (BUFFER_MAX-1))
                 line_buffer[line_index] = dotline;
+            state = STATE_IDLE;
             break;
         }
     }
