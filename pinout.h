@@ -18,17 +18,13 @@
 #ifndef PINOUT_H
 #define PINOUT_H
 
-#define INKSHIELD_PULSE         13      /* D13 */
-#define INKSHIELD_ABCD          14      /* A0/1/2/3 */
+#if defined(__AVR_ATmega2560__)
+#include "pinout-ATmega2560.h"
+#endif
 
-#define ENCODER_A               3
-#define ENCODER_B               4
-
-#define ENDSTOP_MIN             6
-
-#define MOTORENABLE             11      /* Moved from D7 */
-
-#define AFMOTOR                 1
+#if defined(__AVR_ATmega328P__)
+#include "pinout-ATmega328P.h"
+#endif
 
 #define AFMOTOR_PWM_MIN         98
 #define AFMOTOR_PWM_MAX         200
