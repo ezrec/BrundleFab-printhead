@@ -19,11 +19,11 @@
 #define INKSHIELD_H
 
 #ifndef INKSHIELD_PULSE
-#define INKSHIELD_PULSE 2       /* D2 */
+#error INKSHIELD_PULSE is not defined!
 #endif
 
 #ifndef INKSHIELD_ABCD
-#define INKSHIELD_ABCD  14      /* A0..A3 */
+#error INKSHIELD_ABCD is not defined!
 #endif
 
 #define PULSE_PIN  INKSHIELD_PULSE
@@ -32,11 +32,11 @@
 
 #define ABCD_PIN   INKSHIELD_ABCD
 #define ABCD_PORT  portOutputRegister(digitalPinToPort(INKSHIELD_ABCD))
-#define ABCD_BIT   analogInPinToBit(INKSHIELD_ABCD)
-    
-class InkShield {
+#define ABCD_BIT   (INKSHIELD_ABCD - A0)
+ 
+class InkShieldA0A3 {
     public:
-        InkShield()
+        InkShieldA0A3(int ignored)
         {
             pinMode(PULSE_PIN, OUTPUT);
 
@@ -48,9 +48,12 @@ class InkShield {
 
         static inline void setABCD(int nozzle)
         {
-            uint8_t tmp = *ABCD_PORT;
-            tmp &= ~(0xf << ABCD_BIT);
-            *ABCD_PORT = tmp | (nozzle << ABCD_BIT);
+            *ABCD_PORT |= (nozzle << ABCD_BIT);
+        }
+
+        static inline void clrABCD(int nozzle)
+        {
+            *ABCD_PORT &= ~(0xf << ABCD_BIT);
         }
 
         static inline void pulse(void)
@@ -73,6 +76,7 @@ class InkShield {
                 if (strip & (1 << nozzle)) {
                     setABCD(nozzle);
                     pulse();
+                    clrABCD(nozzle);
                 }
             }
             delayMicroseconds(800);
