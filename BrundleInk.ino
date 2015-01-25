@@ -53,7 +53,7 @@
 
 AF_DCMotor dcmotor = AF_DCMotor(AFMOTOR);
 Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
-InkShield ink;
+InkShieldA0A3 ink(INKSHIELD_PULSE);
 
 Motor motor = Motor(&dcmotor, &encoder, AFMOTOR_PWM_MIN, AFMOTOR_PWM_MAX);
 
