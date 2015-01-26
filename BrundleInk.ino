@@ -44,59 +44,48 @@
  */
 #include <InkShield.h>
 
-/* We use a private AFMotor class, because D7 is not available
- * on the the Trinket
- */
-#include <AFMotor.h>
+#include "DCMotor.h"
+#include "AMSMotor.h"
 
-#include "Motor.h"
-
-AF_DCMotor dcmotor = AF_DCMotor(AFMOTOR);
+AMS_DCMotor dcmotor = AMS_DCMotor(MOTOR_SELECT);
 Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
-InkShieldA0A3 ink(INKSHIELD_PULSE);
+INKSHIELD_CLASS ink(INKSHIELD_PULSE);
 
-Motor motor = Motor(&dcmotor, &encoder, AFMOTOR_PWM_MIN, AFMOTOR_PWM_MAX);
+DCMotor_Encoder motor = DCMotor_Encoder(&dcmotor, &encoder, MOTOR_PWM_MIN, MOTOR_PWM_MAX);
 
 #define BUFFER_MAX      512
 uint16_t line_offset;
 uint16_t line_index;
 uint16_t line_buffer[BUFFER_MAX];
 
-#define LINE_IS_REPEAT(line)    ((line) & 0x4000)
-#define LINE_COUNT(line)        ((line) & 0x3fff)
-
-#define IS_COMMAND(c)   ((c) & 0x80)
-#define COMMAND_SYNC    0x8f
-#define COMMAND_RESET   0x80
-#define COMMAND_RUN     0x81
-#define COMMAND_PULSES  0x82
+#define LINE_IS_REPEAT(line)    ((line) & 0x8000)
+#define LINE_COUNT(line)        ((line) & 0x7fff)
 
 static enum {
     STATE_BOGUS,        /* Out of sync */
     STATE_IDLE,         /* No spray, no move */
+    STATE_ZERO,         /* Expecting a 0x00 */
     STATE_DOTLINE,      /* Got the first half of a buffer read */
     STATE_SYNC_1,
     STATE_SYNC_2,
-    STATE_PULSES_1,
-    STATE_PULSES_2
+    STATE_PULSES,
 } state;
 
-static uint16_t pulses;
 static bool active;
+static uint8_t status;
 /* Sprays (1ms) per encoder position,
  * used to determine motor velocity
  */
 static uint16_t sprays;
 
 /* Next response character */
-static uint8_t next_out;
 static uint16_t dotline, count, spray;
-static int32_t last_position;
-
+static int next_position;
+static int last_position;
 
 void setup()
 {
-        Serial.begin(1000000);
+        Serial.begin(115200);
         state = STATE_BOGUS;
         line_index = 0;
         line_offset = 0;
@@ -105,7 +94,9 @@ void setup()
 
 void run(void)
 {
-    last_position = 0;
+Serial.println("motor: on\n");
+    last_position = -1;
+    next_position = 0;
     line_offset = 0;
     dotline = line_buffer[0];
     count   = 1;
@@ -113,22 +104,44 @@ void run(void)
     active = true;
 
     motor.ms_per_position(sprays);
-    motor.run();
+    motor.run(FORWARD);
 }
+
+void home(void)
+{
+    last_position = -1;
+    next_position = 0;
+    line_index = 0;
+    line_offset = 0;
+    count = 0;
+    active = true;
+    motor.ms_per_position(0);
+    motor.run(BACKWARD);
+}
+
+char cmd;
+int arg;
+unsigned long next_time;
 
 void loop()
 {
-    unsigned long now = micros();
-    int32_t pos = encoder.read();
+    unsigned long now = millis();
+    if (now <= next_time)
+        return;
+    next_time  = now + 1;
+
+    int32_t pos = motor.read();
 
     if (active) {
-        if (line_offset >= line_index && count == 0) {
-            /* Out of things to spray, home the head */
-            motor.home();
-        } else {
-            /* Skip positions until we match up with reality */
-            while (last_position < pos) {
+        /* Skip positions until we match up with reality */
+        if (last_position != pos) {
+            while (next_position < pos) {
                 uint16_t tmp;
+
+                if (line_offset >= line_index) {
+                    home();
+                    break;
+                }
 
                 tmp = line_buffer[++line_offset];
                 if (!LINE_IS_REPEAT(tmp)) {
@@ -140,7 +153,7 @@ void loop()
                     spray = 0;
                 }
 
-                last_position += count;
+                next_position += count;
             }
 
             /* Update control, and spray */
@@ -153,82 +166,70 @@ void loop()
                     spray=0;
                 }
             }
+
+            last_position = pos;
+        }
+    
+        status = (status & ~STATUS_MASK_MOTOR);
+        status |= motor.update(pos, now);
+        if (!(status & STATUS_MOTOR_ON)) {
+            active = false;
         }
     }
-    
-    active = motor.update(pos, now);
 
     if (Serial.available()) {
         uint8_t c = Serial.read();
-        Serial.write(next_out);
-        next_out = active ? 0x01 : 0x00;
 
-        switch (state) {
-        case STATE_BOGUS:
-            if (c == COMMAND_SYNC) {
-                state = STATE_SYNC_1;
-                next_out = 0xBF;
-            } else {
-                next_out = '?';
+        if (c == '\n') {
+            /* Do nothing */
+        } else if (isxdigit(c)) {
+            arg <<= 4;
+            arg |= (c >= '0' && c <= '9') ? (c - '0') :
+                   ((c | 0x20) - 'a' + 10);
+        } else if (isspace(c)) {
+            cmd = c;
+            arg = 0;
+        } else {
+            const char *ok = "ok ";
+            switch (cmd) {
+            case 0:
+                ok = NULL;
+                break;
+            case '?':
+                break;
+            case 'l':
+                line_buffer[line_index++] = (arg & 0x7fff);
+                break;
+            case 'r':
+                line_buffer[line_index++] = (arg & 0x7fff) | 0x8000;
+                break;
+            case 'h':
+                home();
+                break;
+            case 'i':
+                run();
+                break;
+            case 's':
+                sprays = arg;
+                break;
+            case 't':
+                //heater_setpoint = arg;
+                break;
+            default:
+                ok = "? ";
             }
-            active = false;
-            break;
-        case STATE_IDLE:
-            if (IS_COMMAND(c)) {
-                switch (c) {
-                case COMMAND_SYNC:
-                    state = STATE_SYNC_1;
-                    next_out = 0xBF;
-                    break;
-                case COMMAND_RESET:
-                    line_index = 0;
-                    /* FALLTROUGH */
-                case COMMAND_RUN:
-                    run();
-                    break;
-                case COMMAND_PULSES:
-                    state = STATE_PULSES_1;
-                    break;
-                default:
-                    state = STATE_BOGUS;
-                    break;
-                }
-            } else {
-                state = STATE_DOTLINE;
-                dotline = c << 8;
-                int left = (BUFFER_MAX - line_index);
-                next_out = (uint8_t)(left >= 255 ? 255 :  left);
+            cmd = 0;
+            if (ok) {
+                Serial.print(ok);
+                Serial.print(status, HEX);
+                Serial.print(" ");
+                Serial.print(sprays, HEX);
+                Serial.print(" ");
+                Serial.print((uint16_t)(BUFFER_MAX - line_index), HEX);
+                Serial.print(" ");
+                Serial.print((uint8_t)0x55, HEX);
+                Serial.println();
             }
-            break;
-        case STATE_SYNC_1:
-            if (c == 0xff) {
-                state = STATE_SYNC_2;
-                next_out = 0x01;
-            } else {
-                state = STATE_BOGUS;
-            }
-            break;
-        case STATE_SYNC_2:
-            if (c == 0)
-                state = STATE_IDLE;
-            else
-                state = STATE_BOGUS;
-            break;
-        case STATE_PULSES_1:
-            pulses = c;
-            state = STATE_PULSES_2;
-            break;
-        case STATE_PULSES_2:
-            pulses <<= 8;
-            pulses |= c;
-            state = STATE_IDLE;
-            break;
-        case STATE_DOTLINE:
-            dotline |= c;
-            if (line_index < (BUFFER_MAX-1))
-                line_buffer[line_index] = dotline;
-            state = STATE_IDLE;
-            break;
         }
     }
 }

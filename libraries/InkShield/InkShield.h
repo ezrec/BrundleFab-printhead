@@ -33,10 +33,10 @@
 #define ABCD_PIN   INKSHIELD_ABCD
 #define ABCD_PORT  portOutputRegister(digitalPinToPort(INKSHIELD_ABCD))
 #define ABCD_BIT   (INKSHIELD_ABCD - A0)
- 
-class InkShieldA0A3 {
+
+class InkShield {
     public:
-        InkShieldA0A3(int ignored)
+        InkShield(int ignored)
         {
             pinMode(PULSE_PIN, OUTPUT);
 
@@ -82,6 +82,9 @@ class InkShieldA0A3 {
             delayMicroseconds(800);
         }
 };
+
+typedef InkShield InkShieldA0A3;
+typedef InkShield InkShieldA2A5;
 
 #endif /* INKSHIELD_H */
 /* vim: set shiftwidth=4 expandtab:  */

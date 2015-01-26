@@ -18,33 +18,39 @@
 #ifndef PINOUT_ATMEGA328P_H
 #define PINOUT_ATMEGA328P_H
 
-#define AFMOTOR                 1
-
 #define ENCODER_A               3       /* D3 */
 
-                                        /* D4 - DIR_CLK */
+#define ENCODER_B               4       /* D4 */
 
-#define ENCODER_B               5       /* D5 */
+#define INKSHIELD_PULSE         5       /* D5 */
 
-#define ENDSTOP_MIN             6       /* D6 */
+#define HEATER_ENABLE           6       /* D6 */
 
                                         /* D7 - NC */
 
-                                        /* D8 - DIR_SET */
+#define MOTOR_B_BRAKE           8       /* D8 */
 
-                                        /* D9 - PWM2A */
+#define MOTOR_A_BRAKE           9       /* D9 */
         
-#define HEATER_ENABLE           10      /* D10 */
+#define MOTOR_A_PWM             10      /* D10 */
+
+#define MOTOR_B_PWM             11      /* D11 */
+
+#define MOTOR_A_DIR             12      /* D12 */
+
+#define MOTOR_B_DIR             13      /* D13 */
                 
-#define MOTORENABLE             11      /* D11 - Moved from D7 */
+#define MOTOR_A_SENSE           A0      /* A0 */
 
-                                        /* D12 - DIR_LATCH */
+#define MOTOR_B_SENSE           A1      /* A1 */
 
-#define INKSHIELD_PULSE         13      /* D13 */
+#define INKSHIELD_ABCD          A2      /* A2/3/4/5 */
 
-#define INKSHIELD_ABCD          0       /* A0/1/2/3 */
+#define HEATER_TEMP             A6      /* A6 - input only */
 
-#define HEATER_TEMP             5       /* A5 */
+                                        /* A7 - input only */
+
+#define INKSHIELD_CLASS         InkShieldA2A5
 
 
 #endif /* PINOUT_ATMEGA328P_H */
