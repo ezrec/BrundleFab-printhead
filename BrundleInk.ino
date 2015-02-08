@@ -44,18 +44,21 @@
  */
 #include <InkShield.h>
 
-#include "DCMotor.h"
 #include "AMSMotor.h"
+#include "Axis_DCEncoder.h"
 
 AMS_DCMotor dcmotor = AMS_DCMotor(MOTOR_SELECT);
 Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
 INKSHIELD_CLASS ink(INKSHIELD_PULSE);
 
-DCMotor_Encoder motor = DCMotor_Encoder(&dcmotor, &encoder, MOTOR_PWM_MIN, MOTOR_PWM_MAX);
+Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
+                                      &encoder, 222.0, -10, 5250,
+                                      -1, -1);
 
 #define BUFFER_MAX      512
 uint16_t line_offset;
 uint16_t line_index;
+uint16_t line_total;
 uint16_t line_buffer[BUFFER_MAX];
 
 #define LINE_IS_REPEAT(line)    ((line) & 0x8000)
@@ -71,7 +74,6 @@ static enum {
     STATE_PULSES,
 } state;
 
-static bool active;
 static uint8_t status;
 /* Sprays (1ms) per encoder position,
  * used to determine motor velocity
@@ -83,28 +85,90 @@ static uint16_t dotline, count, spray;
 static int next_position;
 static int last_position;
 
-void setup()
+void setup(void)
 {
         Serial.begin(115200);
+
+        pinMode(ENCODER_A, INPUT_PULLUP);
+        pinMode(ENCODER_B, INPUT_PULLUP);
+
         state = STATE_BOGUS;
         line_index = 0;
         line_offset = 0;
-        active = true;
+}
+
+void update_ink(void)
+{
+    /* Convert from mm to dotline */
+    int32_t pos = motor.position_get() / 25.4 * 96.0;
+
+    /* Skip positions until we match up with reality */
+    if ((status & STATUS_INK_ON) && (last_position != pos)) {
+        while (next_position < pos) {
+            uint16_t tmp;
+
+            if (line_offset >= line_index) {
+                status &= ~STATUS_INK_ON;
+                break;
+            }
+
+            tmp = line_buffer[++line_offset];
+            if (!LINE_IS_REPEAT(tmp)) {
+                dotline = tmp;
+                count = 1;
+                spray = 0;
+            } else {
+                count = LINE_COUNT(tmp);
+                spray = 0;
+            }
+
+            next_position += count;
+        }
+
+        /* Update control, and spray */
+        if (count) {
+            if (spray < sprays) {
+                ink.spray_ink(dotline);
+                spray++;
+            } else {
+                count--;
+                spray=0;
+            }
+        }
+
+        last_position = pos;
+    }
+}
+
+void update_motor(unsigned long now)
+{
+    if (!motor.update(now)) {
+        if (motor.endstop_min())
+            status |= STATUS_MOTOR_MIN;
+        else
+            status &= ~STATUS_MOTOR_MIN;
+
+        if (motor.endstop_max())
+            status |= STATUS_MOTOR_MAX;
+        else
+            status &= ~STATUS_MOTOR_MAX;
+
+        if (status & STATUS_MOTOR_ON)
+            status &= ~(STATUS_MOTOR_ON | STATUS_INK_ON);
+    }
 }
 
 void run(void)
 {
-Serial.println("motor: on\n");
     last_position = -1;
     next_position = 0;
     line_offset = 0;
     dotline = line_buffer[0];
     count   = 1;
     spray   = 0;
-    active = true;
 
-    motor.ms_per_position(sprays);
-    motor.run(FORWARD);
+    motor.target_set(line_total / 96.0 * 25.4, sprays * line_total);
+    status |= STATUS_INK_ON | STATUS_MOTOR_ON;
 }
 
 void home(void)
@@ -113,10 +177,11 @@ void home(void)
     next_position = 0;
     line_index = 0;
     line_offset = 0;
+    line_total = 0;
     count = 0;
-    active = true;
-    motor.ms_per_position(0);
-    motor.run(BACKWARD);
+
+    motor.home();
+    status |= STATUS_MOTOR_ON;
 }
 
 char cmd;
@@ -130,52 +195,9 @@ void loop()
         return;
     next_time  = now + 1;
 
-    int32_t pos = motor.read();
+    update_ink();
 
-    if (active) {
-        /* Skip positions until we match up with reality */
-        if (last_position != pos) {
-            while (next_position < pos) {
-                uint16_t tmp;
-
-                if (line_offset >= line_index) {
-                    home();
-                    break;
-                }
-
-                tmp = line_buffer[++line_offset];
-                if (!LINE_IS_REPEAT(tmp)) {
-                    dotline = tmp;
-                    count = 1;
-                    spray = 0;
-                } else {
-                    count = LINE_COUNT(tmp);
-                    spray = 0;
-                }
-
-                next_position += count;
-            }
-
-            /* Update control, and spray */
-            if (count) {
-                if (spray < sprays) {
-                    ink.spray_ink(dotline);
-                    spray++;
-                } else {
-                    count--;
-                    spray=0;
-                }
-            }
-
-            last_position = pos;
-        }
-    
-        status = (status & ~STATUS_MASK_MOTOR);
-        status |= motor.update(pos, now);
-        if (!(status & STATUS_MOTOR_ON)) {
-            active = false;
-        }
-    }
+    update_motor(now);
 
     if (Serial.available()) {
         uint8_t c = Serial.read();
@@ -186,7 +208,7 @@ void loop()
             arg <<= 4;
             arg |= (c >= '0' && c <= '9') ? (c - '0') :
                    ((c | 0x20) - 'a' + 10);
-        } else if (isspace(c)) {
+        } else if (!isspace(c)) {
             cmd = c;
             arg = 0;
         } else {
@@ -198,9 +220,11 @@ void loop()
             case '?':
                 break;
             case 'l':
+                line_total++;
                 line_buffer[line_index++] = (arg & 0x7fff);
                 break;
             case 'r':
+                line_total+= (arg & 0x7fff);
                 line_buffer[line_index++] = (arg & 0x7fff) | 0x8000;
                 break;
             case 'h':
@@ -210,7 +234,7 @@ void loop()
                 run();
                 break;
             case 's':
-                sprays = arg;
+                sprays = arg + 1;
                 break;
             case 't':
                 //heater_setpoint = arg;

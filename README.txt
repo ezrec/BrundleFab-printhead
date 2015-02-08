@@ -35,7 +35,7 @@ Serial commands:
 
 Status report:
 
-=> "ok SS I NNN TT"
+=> "ok SS I NNN TT\n"
 
   SS:
      Bit 0 - Motor on
@@ -48,7 +48,7 @@ Status report:
      Bit 7 - Ink tank empty (todo, always 0)
 
   I:
-     Ink sprays per position
+     Ink sprays per dotline
 
   NNN:
      Entries left in dotline buffer

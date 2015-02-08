@@ -76,7 +76,7 @@ class AMS_DCMotor : public DCMotor {
             pinMode(_brake, OUTPUT);
         }
 
-        void run(int8_t cmd)
+        void run(uint8_t cmd)
         {
             if (cmd == FORWARD) {
                 digitalWrite(_dir, LOW);

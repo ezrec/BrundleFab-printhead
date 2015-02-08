@@ -61,17 +61,14 @@ class InkShield {
             /* No interrupts while spraying,
              * or you can burn out a nozzle!
              */
-            noInterrupts();
-
-                *PULSE_PORT |= PULSE_MASK;
-                delayMicroseconds(5);
-                *PULSE_PORT &= PULSE_MASK;
-
-            interrupts();
+            *PULSE_PORT |= PULSE_MASK;
+            delayMicroseconds(5);
+            *PULSE_PORT &= ~PULSE_MASK;
         }
 
         void spray_ink(uint16_t strip)
         {
+            noInterrupts();
             for (uint8_t nozzle = 0; nozzle < 12; nozzle++) {
                 if (strip & (1 << nozzle)) {
                     setABCD(nozzle);
@@ -79,6 +76,7 @@ class InkShield {
                     clrABCD(nozzle);
                 }
             }
+            interrupts();
             delayMicroseconds(800);
         }
 };
