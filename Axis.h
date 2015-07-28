@@ -77,12 +77,12 @@ class Axis {
     virtual void target_set(float mm, unsigned long ms = 0)
     {
         if (ms > 0)
-            _target.velocity = fabs(mm / ms);
+            _target.velocity = fabs((position_get() - mm) / ms);
         else
             _target.velocity = 0;
  
         _target.ms = millis() + ms;
-        _target.mm = position_get() + mm;
+        _target.mm = mm;
         _updated = false;
     }
 
