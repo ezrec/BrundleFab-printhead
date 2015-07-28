@@ -15,24 +15,42 @@
  *
  */
 
-#ifndef PINOUT_H
-#define PINOUT_H
+#ifndef PINOUT_SIMAVR_H
+#define PINOUT_SIMAVR_H
 
-#if defined(__AVR_ATmega2560__)
-#include "pinout-ATmega2560.h"
-#endif
+#define INKSHIELD_PULSE         2       /* D2 */
 
-#if defined(__AVR_ATmega328P__)
-#include "pinout-ATmega328P.h"
-#endif
+                                        /* D7 - DIR_EN */
 
-#if defined(__SIMAVR__)
-#include "pinout-simavr.h"
-#endif
+                                        /* D8 - DIR_SET */
 
-#define MOTOR_SELECT            1       /* Arduino Motor Shield 'A' */
-#define MOTOR_PWM_MIN           98
-#define MOTOR_PWM_MAX           150
+                                        /* D9 - PWM2A */
+        
+                                        /* D12 - DIR_LATCH */
+
+#define INKSHIELD_ABCD          0       /* A0/1/2/3 */
+
+#define INKSHIELD_CLASS         InkShieldA0A3
+
+#define HEATER_TEMP             5       /* A5 */
+
+#define ENCODER_A               19      /* D3 */
+
+                                        /* D4 - DIR_CLK */
+
+#define ENCODER_B               29      /* D5 */
+
+#define ENDSTOP_MIN             35      /* D6 */
+
+#define HEATER_ENABLE           43      /* D43 */
+
+/**
+ * Other configs
+ */
+#define AFMOTOR                 4
+
+#define AFMOTOR_PWM_MIN         98
+#define AFMOTOR_PWM_MAX         200
 
 /**
  * Global status bits
@@ -51,5 +69,5 @@
                                  STATUS_MOTOR_MIN | \
                                  STATUS_MOTOR_MAX)
 
-#endif /* PINOUT_H */
+#endif /* PINOUT_SIMAVR_H */
 /* vim: set shiftwidth=4 expandtab:  */

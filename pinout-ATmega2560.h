@@ -30,6 +30,8 @@
 
 #define INKSHIELD_ABCD          0       /* A0/1/2/3 */
 
+#define INKSHIELD_CLASS         InkShieldA0A3
+
 #define HEATER_TEMP             5       /* A5 */
 
 #define ENCODER_A               19      /* D3 */
