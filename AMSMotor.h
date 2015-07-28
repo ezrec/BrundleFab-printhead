@@ -30,7 +30,7 @@
 #define MOTOR_B_DIR     13
 #endif
 #ifndef MOTOR_A_PWM
-#define motor_A_PWM     3
+#define MOTOR_A_PWM     3
 #endif
 #ifndef MOTOR_B_PWM
 #define MOTOR_B_PWM     11
