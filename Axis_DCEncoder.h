@@ -36,14 +36,15 @@ class Axis_DCEncoder : public Axis {
         uint8_t _pwmMaximum;
 
         float _mm_to_position;
-        int32_t _target_pos;
+        int32_t _target_pos, _last_pos;
+	unsigned long _last_ms;
 
         DCMotor *_motor;
         Encoder *_encoder;
 
         enum {
             IDLE = 0,
-            MOVING = 1, MOVING_OVERSHOOT = 2,
+            MOVING = 1,
             HOMING_STOP = 3,
             HOMING_STOP_QUIESCE = 4,
             HOMING_STOP_BACKOFF = 5,
@@ -123,6 +124,7 @@ class Axis_DCEncoder : public Axis {
                 _homing.pwm = (_pwmMinimum + _pwmMaximum) / 2;
             }
 
+	    motor_enable(true);
             _motor->setSpeed(_homing.pwm);
             _motor->run(_homing.dir);
         }
@@ -178,6 +180,9 @@ class Axis_DCEncoder : public Axis {
 
         virtual bool update(unsigned long ms_now)
         {
+	    if (!motor_enabled())
+		return false;
+
             int32_t pos = _encoder->read();
             int32_t tar = _target_pos;
 
@@ -197,6 +202,8 @@ if (DEBUG) {
             case IDLE:
                 if (tar != pos) {
                     _mode = MOVING;
+	    	    _last_pos = _encoder->read();
+		    _last_ms  = ms_now;
                     return update(ms_now);
                 }
                 break;
@@ -257,7 +264,6 @@ if (DEBUG) {
                 }
                 break;
             case MOVING:
-            case MOVING_OVERSHOOT:
                 if (_pinStopMin >= 0 && digitalRead(_pinStopMin) == 1) {
                     if (tar <= pos) {
                         _mode = IDLE;
@@ -276,55 +282,37 @@ if (DEBUG) {
                     }
                 }
 
-                int32_t distance = (pos > tar) ? (pos - tar) : (tar - pos);
+                int32_t distance = (tar < pos) ? (pos - tar) : (tar - pos);
 
-                if (distance == 0) {
+                if (distance < _overshoot) {
                     _motor->run(BRAKE);
                     _motor->setSpeed(0);
-                    if (_mode == MOVING) {
-                        _moving.timeout = ms_now + 1;
-                        _moving.overshoot = _overshoot;
-                        _mode = MOVING_OVERSHOOT;
-                    } else {
-                        if (ms_now < _moving.timeout)
-                            break;
-                        if (_moving.overshoot) {
-                            _moving.overshoot--;
-                            _moving.timeout = ms_now + 1;
-                        } else {
-                            _mode = IDLE;
-                        }
-                    }
+		    _mode = IDLE;
+		    motor_enable(false);
                     break;
                 }
 
-                if (ms_now < _target.ms) {
-                    float velocity = (distance * _mm_to_position) / (float)(_target.ms - ms_now);
+                if (ms_now > (_last_ms+3)) {
+                    float velocity = fabs((_pos2mm(pos) - _pos2mm(_last_pos)) / (ms_now - _last_ms));
                                          
-                    if (velocity < _target.velocity) {
+if (DEBUG) {
+    Serial.print(" vel:");Serial.print(velocity*100);Serial.print("::");
+    Serial.print(_target.velocity*100);
+}
+		    if (velocity < _target.velocity) {
                         if (_pwm < _pwmMaximum)
                             _pwm++;
                     } else {
-                        if (_pwm > _pwmMinimum)
+                        if (_pwm > 0)
                             _pwm--;
                     }
-                } else if (distance > _overshoot) {
-                    _pwm = (_pwmMinimum + _pwmMaximum) / 2;
-                } else {
-                    _pwm = _pwmMinimum;
+
+		    _last_pos = pos;
+		    _last_ms = ms_now;
                 }
 
                 _motor->setSpeed(_pwm);
                 _motor->run((pos < tar) ? FORWARD : BACKWARD);
-                break;
-                if (ms_now > _moving.timeout) {
-                    if (_moving.overshoot) {
-                        _moving.overshoot--;
-                        _motor->run(BRAKE);
-                        _motor->setSpeed(0);
-                        _mode = MOVING;
-                    }
-                }
                 break;
             }
 

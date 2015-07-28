@@ -32,7 +32,7 @@
 
 #define MOTOR_SELECT            1       /* Arduino Motor Shield 'A' */
 #define MOTOR_PWM_MIN           98
-#define MOTOR_PWM_MAX           150
+#define MOTOR_PWM_MAX           255
 
 /**
  * Global status bits
