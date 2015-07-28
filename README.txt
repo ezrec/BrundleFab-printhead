@@ -35,7 +35,7 @@ Serial commands:
 
 Status report:
 
-=> "ok SS I NNN TT\n"
+=> "ok SS I NNN TT MMM\n"
 
   SS:
      Bit 0 - Motor on
@@ -43,7 +43,7 @@ Status report:
      Bit 2 - Motor min endstop
      Bit 3 - Motor max endstop
      Bit 4 - Heater on
-     Bit 5 - Heater at temp
+     Bit 5 - Heater at or above temp
      Bit 6 - Ink spraying
      Bit 7 - Ink tank empty (todo, always 0)
 
@@ -56,12 +56,15 @@ Status report:
   TT:
      Temp of the heater in degress C/2
 
+  MMM:
+     Dotline position
+
 Commands:
 
   Up to 4 characters, terminated by a space characters (ie '\r', '\n', etc)
 
   "lXXX"
-      Add to dot line buffer, 0xbb is free dotlines in buffer
+      Add 12-bit pattern to dotline buffer
       (a dotline is 1/96th of an inch, or 0.2646 mm)
 
   "rXXX"
@@ -74,12 +77,18 @@ Commands:
       Reset dot line buffer, move to start
 
   "i"
-      Start inking
+      Ink - Start inking from here till end of dotline
+
+  "j"
+      Jump-back - Start inking from here till start of dotline
+
+  "k"
+      Kill - Cancel movement, clear dotline buffer
 
   "sX"
       Set number of sprays/dotline - 1
 
   "tXX"
-      Heater temp, in degrees C / 2
+      Temp - Target heater temp, in degrees C / 2
 
 # vim: set shiftwidth=4 expandtab: 

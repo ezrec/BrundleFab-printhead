@@ -23,16 +23,26 @@
  *   For every dot line, we will need to overspray by N to apply enough
  *   binder to the powder. So, N x 1ms per dot line.
  *
- *   The encoder is 600dpi, over 8.75" of travel, for 5250 dot lines
- *   per spray bar.
+ *   The encoder is 600dpi, over 8.75" of travel, for 5250 possible
+ *   dot lines per spray bar. However, we will only ink at 100 DPI, so
+ *   we will only use 875 of those possible dotlines.
  *
- *   The maximum velocity of the printhead is therefore:
+ *   The Atmel323 only has 2K of RAM, so we use the same ink pattern
+ *   twice - the pattern in read forwards at 2x the dot rate, then
+ *   in reverse as the head returns.
  *
- *     v(lines/sec) = 5250 / (N x 1ms);
+ *   The maximum Y axis "feed rate" of the printhead is therefore:
  *
- *   The Atmel323 only has 2K of RAM, so ink patterns are delta compressed:
- *       0x0nnn = Emit pattern
- *       0x1nnn = Repeat previous pattern nnn times
+ *     v(mm/min) = in/96dots * 25.4mm/in * 1dot/1ms * 1000ms/sec * 60sec/min
+ *               = 15875 mm/min
+ *
+ *   Covering a swatch of 3.175mm (12/96")
+ *
+ *   Just the time needed to ink a 100mm solid cube (without accounting for
+ *   the X, Z, or extruder movements), assuming a 1mm extruder, would be:
+ *
+ *   t = (100mm / 1mm) * (100mm / 3.175mm) * (100mm * min/15875mm)
+ *     = 19.8 minutes
  *   
  */
 
@@ -51,18 +61,53 @@ AMS_DCMotor dcmotor = AMS_DCMotor(MOTOR_SELECT);
 Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
 INKSHIELD_CLASS ink(INKSHIELD_PULSE);
 
+#define SCAN_WIDTH_CI	875L	/* 8.75" in ceniinches */
+
+/* NOTE: This encoder is 600DPI */
 Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
-                                      &encoder, 222.0, -10, 5250,
+                                      &encoder,
+				      SCAN_WIDTH_CI * 0.254, -10,
+				      SCAN_WIDTH_CI * 600 / 100,
                                       -1, -1);
 
-#define BUFFER_MAX      512
-uint16_t line_offset;
+#define POSITION_MAX      (SCAN_WIDTH_CI * 96 / 100)
+#define BUFFER_POS(x)	  (((x) * 3)/2)
+
 uint16_t line_index;
 uint16_t line_total;
-uint16_t line_buffer[BUFFER_MAX];
+uint8_t line_buffer[BUFFER_POS(POSITION_MAX)+1];
 
-#define LINE_IS_REPEAT(line)    ((line) & 0x8000)
-#define LINE_COUNT(line)        ((line) & 0x7fff)
+static inline uint16_t line_get(uint16_t pos)
+{
+    uint16_t i = BUFFER_POS(pos);
+    uint16_t line;
+
+    if (pos > line_total)
+        return 0;
+
+    line = ((uint16_t)line_buffer[i] << 8) | line_buffer[i+1];
+    line >>= (i & 1) ? 0 : 4;
+    
+    return line & 0xfff;
+}
+
+static inline void line_set(uint16_t pos, uint16_t line)
+{
+    uint16_t i = BUFFER_POS(pos);
+    uint16_t mask = 0xfff;
+
+    if (pos > POSITION_MAX)
+        return;
+
+    line <<= (i & 1) ? 0 : 4;
+    mask <<= (i & 1) ? 0 : 4;
+
+    line_buffer[i+0] &= (mask>>8) & 0xff;
+    line_buffer[i+0] |= (line>>8);
+
+    line_buffer[i+1] &= (mask>>0) & 0xff;
+    line_buffer[i+1] |= (line>>0);
+}
 
 static enum {
     STATE_BOGUS,        /* Out of sync */
@@ -75,15 +120,8 @@ static enum {
 } state;
 
 static uint8_t status;
-/* Sprays (1ms) per encoder position,
- * used to determine motor velocity
- */
-static uint16_t sprays;
 
 /* Next response character */
-static uint16_t dotline, count, spray;
-static int next_position;
-static int last_position;
 
 void setup(void)
 {
@@ -94,49 +132,17 @@ void setup(void)
 
         state = STATE_BOGUS;
         line_index = 0;
-        line_offset = 0;
+        line_total = 0;
 }
 
 void update_ink(void)
 {
-    /* Convert from mm to dotline */
-    int32_t pos = motor.position_get() / 25.4 * 96.0;
+    /* Sprayer on? */
+    if ((status & STATUS_INK_ON)) {
+        /* Convert from mm to dotline */
+        int32_t pos = motor.position_get() / 25.4 * 96.0;
 
-    /* Skip positions until we match up with reality */
-    if ((status & STATUS_INK_ON) && (last_position != pos)) {
-        while (next_position < pos) {
-            uint16_t tmp;
-
-            if (line_offset >= line_index) {
-                status &= ~STATUS_INK_ON;
-                break;
-            }
-
-            tmp = line_buffer[++line_offset];
-            if (!LINE_IS_REPEAT(tmp)) {
-                dotline = tmp;
-                count = 1;
-                spray = 0;
-            } else {
-                count = LINE_COUNT(tmp);
-                spray = 0;
-            }
-
-            next_position += count;
-        }
-
-        /* Update control, and spray */
-        if (count) {
-            if (spray < sprays) {
-                ink.spray_ink(dotline);
-                spray++;
-            } else {
-                count--;
-                spray=0;
-            }
-        }
-
-        last_position = pos;
+        ink.spray_ink(line_get(pos));
     }
 }
 
@@ -153,32 +159,34 @@ void update_motor(unsigned long now)
         else
             status &= ~STATUS_MOTOR_MAX;
 
-        if (status & STATUS_MOTOR_ON)
+        if (status & STATUS_MOTOR_ON) {
+	    motor.motor_enable(false);
             status &= ~(STATUS_MOTOR_ON | STATUS_INK_ON);
+	}
     }
 }
 
-void run(void)
-{
-    last_position = -1;
-    next_position = 0;
-    line_offset = 0;
-    dotline = line_buffer[0];
-    count   = 1;
-    spray   = 0;
+uint16_t sprays;
 
-    motor.target_set(line_total / 96.0 * 25.4, sprays * line_total);
+void inkto(uint16_t line_target)
+{
+    unsigned long ms;
+    uint16_t pos = motor.position_get() / 25.4 * 96.0;
+
+    /* ms = 1 dotline/ms * sprays/dotline * dotlines-to-travel
+     */
+    ms = sprays * abs((int)pos - (int)line_target);
+
+    motor.motor_enable(true);
+    motor.target_set(line_target / 96.0 * 25.4, ms);
     status |= STATUS_INK_ON | STATUS_MOTOR_ON;
 }
 
 void home(void)
 {
-    last_position = -1;
-    next_position = 0;
     line_index = 0;
-    line_offset = 0;
     line_total = 0;
-    count = 0;
+    sprays = 1;
 
     motor.home();
     status |= STATUS_MOTOR_ON;
@@ -220,19 +228,35 @@ void loop()
             case '?':
                 break;
             case 'l':
+		if (line_total >= POSITION_MAX)
+			break;
                 line_total++;
-                line_buffer[line_index++] = (arg & 0x7fff);
+                line_set(line_index++, arg & 0xfff);
                 break;
             case 'r':
+		if (line_total >= POSITION_MAX)
+			break;
                 line_total+= (arg & 0x7fff);
-                line_buffer[line_index++] = (arg & 0x7fff) | 0x8000;
+		if (line_total > POSITION_MAX)
+			line_total = POSITION_MAX;
+                arg = (line_index > 0) ? line_get(line_index-1) : 0;
+                while (line_index < line_total)
+                        line_set(line_index++, arg);
                 break;
             case 'h':
                 home();
                 break;
             case 'i':
-                run();
+                inkto(line_total);
                 break;
+            case 'j':
+                inkto(0);
+                break;
+	    case 'k':
+		line_total=0;
+		line_index=0;
+		motor.motor_enable(false);
+		break;
             case 's':
                 sprays = arg + 1;
                 break;
@@ -244,14 +268,19 @@ void loop()
             }
             cmd = 0;
             if (ok) {
+		int16_t pos = motor.position_get() / 25.4 * 96.0;
+		if (pos < 0)
+		    pos = 0;
                 Serial.print(ok);
                 Serial.print(status, HEX);
                 Serial.print(" ");
                 Serial.print(sprays, HEX);
                 Serial.print(" ");
-                Serial.print((uint16_t)(BUFFER_MAX - line_index), HEX);
+                Serial.print((uint16_t)(POSITION_MAX - line_index), HEX);
                 Serial.print(" ");
                 Serial.print((uint8_t)0x55, HEX);
+                Serial.print(" ");
+                Serial.print(pos, HEX);
                 Serial.println();
             }
         }
