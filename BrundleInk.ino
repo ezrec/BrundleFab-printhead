@@ -62,20 +62,22 @@ Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
 INKSHIELD_CLASS ink(INKSHIELD_PULSE);
 
 #define SCAN_WIDTH_CI	875L	/* 8.75" in ceniinches */
+#define SCAN_WIDTH_MM	((float)SCAN_WIDTH_CI * 0.254)
+#define SCAN_WIDTH_ENC 	(SCAN_WIDTH_CI * 600 / 100)
+#define SCAN_WIDTH_DOT  (SCAN_WIDTH_CI * 96 / 100)
 
 /* NOTE: This encoder is 600DPI */
 Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
                                       &encoder,
-				      SCAN_WIDTH_CI * 0.254, -10,
-				      SCAN_WIDTH_CI * 600 / 100,
+				      SCAN_WIDTH_MM,
+				      -10, SCAN_WIDTH_ENC,
                                       -1, -1);
 
-#define POSITION_MAX      (SCAN_WIDTH_CI * 96 / 100)
 #define BUFFER_POS(x)	  (((x) * 3)/2)
 
 uint16_t line_index;
 uint16_t line_total;
-uint8_t line_buffer[BUFFER_POS(POSITION_MAX)+1];
+uint8_t line_buffer[BUFFER_POS(SCAN_WIDTH_DOT)+1];
 
 static inline uint16_t line_get(uint16_t pos)
 {
@@ -96,7 +98,7 @@ static inline void line_set(uint16_t pos, uint16_t line)
     uint16_t i = BUFFER_POS(pos);
     uint16_t mask = 0xfff;
 
-    if (pos > POSITION_MAX)
+    if (pos > SCAN_WIDTH_DOT)
         return;
 
     line <<= (i & 1) ? 0 : 4;
@@ -228,17 +230,17 @@ void loop()
             case '?':
                 break;
             case 'l':
-		if (line_total >= POSITION_MAX)
+		if (line_total >= SCAN_WIDTH_DOT)
 			break;
                 line_total++;
                 line_set(line_index++, arg & 0xfff);
                 break;
             case 'r':
-		if (line_total >= POSITION_MAX)
+		if (line_total >= SCAN_WIDTH_DOT)
 			break;
                 line_total+= (arg & 0x7fff);
-		if (line_total > POSITION_MAX)
-			line_total = POSITION_MAX;
+		if (line_total > SCAN_WIDTH_DOT)
+			line_total = SCAN_WIDTH_DOT;
                 arg = (line_index > 0) ? line_get(line_index-1) : 0;
                 while (line_index < line_total)
                         line_set(line_index++, arg);
@@ -276,7 +278,7 @@ void loop()
                 Serial.print(" ");
                 Serial.print(sprays, HEX);
                 Serial.print(" ");
-                Serial.print((uint16_t)(POSITION_MAX - line_index), HEX);
+                Serial.print((uint16_t)(SCAN_WIDTH_DOT - line_index), HEX);
                 Serial.print(" ");
                 Serial.print((uint8_t)0x55, HEX);
                 Serial.print(" ");
