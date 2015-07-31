@@ -77,11 +77,12 @@ class Axis_DCEncoder : public Axis {
 
     public:
         Axis_DCEncoder(DCMotor *motor,
-                           uint8_t pwm_min, uint8_t pwm_max,
+		       uint8_t pwm_min, uint8_t pwm_max,
                        Encoder *encoder,
                            float mm, int32_t minpos, int32_t maxpos,
-                       int stop_min, int stop_max) :
-            Axis()
+                       int stop_min, int stop_max,
+		       float vel_max_mm_per_ms = 0.0) :
+            Axis(vel_max_mm_per_ms)
         {
             _motor = motor;
             _encoder = encoder;
@@ -204,6 +205,9 @@ if (DEBUG) {
                     _mode = MOVING;
 	    	    _last_pos = _encoder->read();
 		    _last_ms  = ms_now;
+if (DEBUG) {
+    Serial.println(" MOVING");
+}
                     return update(ms_now);
                 }
                 break;
@@ -292,7 +296,7 @@ if (DEBUG) {
                     break;
                 }
 
-                if (ms_now > (_last_ms+3)) {
+                if (ms_now > (_last_ms+3) && _target.velocity > 0.0) {
                     float velocity = fabs((_pos2mm(pos) - _pos2mm(_last_pos)) / (ms_now - _last_ms));
                                          
 if (DEBUG) {
@@ -318,7 +322,8 @@ if (DEBUG) {
 
 if (DEBUG) {
     Serial.print(" => mode:");Serial.print(_mode);
-    Serial.print(" pwm:");Serial.println(_pwm);
+    Serial.print(" pwm:");Serial.print(_pwm);
+    Serial.print(motor_enabled() ? "\r" : "\r\n");
 }
              return (_mode == IDLE) ? false : true;
         }

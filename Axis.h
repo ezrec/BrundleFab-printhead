@@ -30,6 +30,7 @@
 class Axis {
   private:
     bool _enabled, _updated;
+    float _velocity_limit_mm_per_ms;
   protected:
     struct {
         float mm;
@@ -38,8 +39,9 @@ class Axis {
     } _target;
 
   public:
-    Axis()
+    Axis(float velocity_limit_mm_per_ms = 0.0)
     {
+	_velocity_limit_mm_per_ms = velocity_limit_mm_per_ms;
     }
 
     virtual void begin()
@@ -80,6 +82,9 @@ class Axis {
             _target.velocity = fabs((position_get() - mm) / ms);
         else
             _target.velocity = 0;
+
+	if (_target.velocity > _velocity_limit_mm_per_ms)
+	    _target.velocity = _velocity_limit_mm_per_ms;
  
         _target.ms = millis() + ms;
         _target.mm = mm;
