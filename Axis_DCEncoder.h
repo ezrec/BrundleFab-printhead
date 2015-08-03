@@ -36,8 +36,11 @@ class Axis_DCEncoder : public Axis {
         uint8_t _pwmMaximum;
 
         float _mm_to_position;
-        int32_t _target_pos, _last_pos;
-	unsigned long _last_ms;
+        int32_t _target_pos;
+        struct {
+            int32_t pos;
+	    unsigned long ms;
+        } _last;
 
         DCMotor *_motor;
         Encoder *_encoder;
@@ -62,6 +65,10 @@ class Axis_DCEncoder : public Axis {
             int pin, dir;
             uint8_t pwm;
         } _homing;
+        struct {
+            unsigned long ms;
+            int32_t pos;
+        } _stall;
 
         uint8_t _pwm;
 
@@ -203,8 +210,10 @@ if (DEBUG) {
             case IDLE:
                 if (tar != pos) {
                     _mode = MOVING;
-	    	    _last_pos = _encoder->read();
-		    _last_ms  = ms_now;
+	    	    _last.pos = _encoder->read();
+		    _last.ms  = ms_now;
+                    _stall.ms = ms_now;
+                    _stall.pos = _last.pos;
 if (DEBUG) {
     Serial.println(" MOVING");
 }
@@ -233,6 +242,10 @@ if (DEBUG) {
                     _motor->setSpeed(_homing.pwm);
                     _encoder->write(_homing.home);
                     _mode = MOVING;
+	    	    _last.pos = _encoder->read();
+		    _last.ms  = ms_now;
+                    _stall.ms = ms_now;
+                    _stall.pos = _last.pos;
                     Axis::home(_homing.target);
                 }
                 break;
@@ -292,13 +305,23 @@ if (DEBUG) {
                     _motor->run(BRAKE);
                     _motor->setSpeed(0);
 		    _mode = IDLE;
-		    motor_enable(false);
                     break;
                 }
 
-                if (ms_now > (_last_ms+3) && _target.velocity > 0.0) {
-                    float velocity = fabs((_pos2mm(pos) - _pos2mm(_last_pos)) / (ms_now - _last_ms));
-                                         
+                if (ms_now > (_stall.ms+250)) {
+                    /* Stalled? */
+                    if (pos == _stall.pos) {
+                        _mode = IDLE;
+                        break;
+                    }
+
+                    _stall.ms = ms_now;
+                    _stall.pos = pos;
+                }
+
+                if (ms_now > (_last.ms+3) && _target.velocity > 0.0) {
+                    float velocity = fabs((_pos2mm(pos) - _pos2mm(_last.pos)) / (ms_now - _last.ms));
+
 if (DEBUG) {
     Serial.print(" vel:");Serial.print(velocity*100);Serial.print("::");
     Serial.print(_target.velocity*100);
@@ -311,8 +334,8 @@ if (DEBUG) {
                             _pwm--;
                     }
 
-		    _last_pos = pos;
-		    _last_ms = ms_now;
+		    _last.pos = pos;
+		    _last.ms = ms_now;
                 }
 
                 _motor->setSpeed(_pwm);
@@ -325,6 +348,10 @@ if (DEBUG) {
     Serial.print(" pwm:");Serial.print(_pwm);
     Serial.print(motor_enabled() ? "\r" : "\r\n");
 }
+
+             if (_mode == IDLE)
+                 motor_enable(false);
+
              return (_mode == IDLE) ? false : true;
         }
 };
