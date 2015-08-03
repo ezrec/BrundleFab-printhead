@@ -191,7 +191,6 @@ void home(void)
 {
     line_index = 0;
     line_total = 0;
-    sprays = 1;
 
     motor.home();
     status |= STATUS_MOTOR_ON;
