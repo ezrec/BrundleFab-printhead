@@ -19,7 +19,7 @@
  *   The ink ejector (HP C6602A via InkShield) takes 5us x 12 to
  *   emit a dot line, but requires 800us cool down between dot lines.
  *   For sake of simplicity, 1ms is allocated for a dot line.
- *   
+ *
  *   For every dot line, we will need to overspray by N to apply enough
  *   binder to the powder. So, N x 1ms per dot line.
  *
@@ -43,7 +43,7 @@
  *
  *   t = (100mm / 1mm) * (100mm / 3.175mm) * (100mm * min/15875mm)
  *     = 19.8 minutes
- *   
+ *
  */
 
 #include "pinout.h"
@@ -76,11 +76,32 @@ Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
                                       -1, -1,
 				      SCAN_VEL_MAX);
 
-#define BUFFER_POS(x)	  (((x) * 3)/2)
+/*
+ * This can get a bit confusing, with how the bits are packed:
+ *
+ *  |B A 9 8 7 6 5 4|3 2 1 0-B A 9 8|7 6 5 4 3 2 1 0|....
+ *  | even-hi       |even-lo;odd-hi |   odd-lo      |
+ *
+ * So, if a position is even:
+ *
+ * bits = ((buff[pos/2*3]<<8) | (buff[pos/2*3+1])) >> 4)
+ *
+ * And if it is odd:
+ *
+ * bits = ((buff[pos/2*3+1]<<8) | (buff[pos/2*3+2])) & 0x3ff
+ */
+
+#define BUFFER_POS(x)	  (((x) / 2 * 3) + ((x)&1))
+#define BUFFER_SHIFT(x)   (((x) & 1) ? 0 : 4)
 
 uint16_t line_index;
 uint16_t line_total;
 uint8_t line_buffer[BUFFER_POS(SCAN_WIDTH_DOT)+1];
+
+static inline void line_reset(void)
+{
+    line_index = line_total = 0;
+}
 
 static inline uint16_t line_get(uint16_t pos)
 {
@@ -91,8 +112,8 @@ static inline uint16_t line_get(uint16_t pos)
         return 0;
 
     line = ((uint16_t)line_buffer[i] << 8) | line_buffer[i+1];
-    line >>= (i & 1) ? 0 : 4;
-    
+    line >>= BUFFER_SHIFT(pos);
+
     return line & 0xfff;
 }
 
@@ -104,13 +125,13 @@ static inline void line_set(uint16_t pos, uint16_t line)
     if (pos > SCAN_WIDTH_DOT)
         return;
 
-    line <<= (i & 1) ? 0 : 4;
-    mask <<= (i & 1) ? 0 : 4;
+    line <<= BUFFER_SHIFT(pos);
+    mask <<= BUFFER_SHIFT(pos);
 
-    line_buffer[i+0] &= (mask>>8) & 0xff;
+    line_buffer[i+0] &= ~((mask>>8) & 0xff);
     line_buffer[i+0] |= (line>>8);
 
-    line_buffer[i+1] &= (mask>>0) & 0xff;
+    line_buffer[i+1] &= ~((mask>>0) & 0xff);
     line_buffer[i+1] |= (line>>0);
 }
 
