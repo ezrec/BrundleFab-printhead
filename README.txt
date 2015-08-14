@@ -9,18 +9,18 @@ Pinout:
 
   0     RX
   1     TX
-  2     --
-  3     Encoder A 
-  4     DIR_CLK
-  5     Encoder B
-  6     ENDSTOP_MIN
-  7     --   
-  8     DIR_SET
-  9     PWM2A
-  10    HEATER_EN
-  11    DIR_EN          /* Moved from D7 */
-  12    DIR_LATCH
-  13    INK_PULSE
+  2     Encoder A
+  3     Encoder B
+  4     --
+  5     INK_PULSE
+  6     --
+  7     --
+  8     MOTOR_B_BRAKE
+  9     MOTOR_A_BRAKE
+  10    MOTOR_A_PWM
+  11    MOTOR_B_PWM
+  12    MOTOR_A_DIR
+  13    MOTOR_B_DIR
 
   A0    INK_A
   A1    INK_B
@@ -33,9 +33,19 @@ Pinout:
 Serial commands:
 ----------------
 
-Status report:
+Command is a newline termininated string, of the form:
 
-=> "ok SS I NNN TT MMM\n"
+  Cnnn
+
+  'C' is the command, and 'nnn' is the parameter.
+
+Status report response to a command:
+
+=> "ok SS I NNN LL MMM\n"
+
+or
+
+==> "!!\n"
 
   SS:
      Bit 0 - Motor on
@@ -53,8 +63,8 @@ Status report:
   NNN:
      Entries left in dotline buffer
 
-  TT:
-     Temp of the heater in degress C/2
+  LL:
+     Line number (incremented after this command)
 
   MMM:
      Dotline position
@@ -68,11 +78,11 @@ Commands:
       (a dotline is 1/96th of an inch, or 0.2646 mm)
 
   "rXXX"
-      Repeat last dot line NNN+1 times 
+      Repeat last dot line NNN+1 times
 
   "?"
       No-op - return status
-      
+
   "h"
       Reset dot line buffer, move to start
 
@@ -85,10 +95,11 @@ Commands:
   "k"
       Kill - Cancel movement, clear dotline buffer
 
+  "nXXX"
+      Number - set current 12-bit line number (wrapping) to X
+
   "sX"
       Set number of sprays/dotline - 1
 
-  "tXX"
-      Temp - Target heater temp, in degrees C / 2
 
 # vim: set shiftwidth=4 expandtab: 

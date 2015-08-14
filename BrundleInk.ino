@@ -220,6 +220,7 @@ void home(void)
 char cmd;
 int arg;
 unsigned long next_time;
+int line_no;
 
 void loop()
 {
@@ -237,7 +238,7 @@ void loop()
 
         if (c == '\n') {
             /* Do nothing */
-        } else if (isxdigit(c)) {
+        } else if (cmd && isxdigit(c)) {
             arg <<= 4;
             arg |= (c >= '0' && c <= '9') ? (c - '0') :
                    ((c | 0x20) - 'a' + 10);
@@ -282,14 +283,14 @@ void loop()
 		line_index=0;
 		motor.motor_enable(false);
 		break;
+	    case 'n':
+	        line_no=arg;
+	        break;
             case 's':
                 sprays = arg + 1;
                 break;
-            case 't':
-                //heater_setpoint = arg;
-                break;
             default:
-                ok = "? ";
+                ok = "!! ";
             }
             cmd = 0;
             if (ok) {
@@ -303,11 +304,12 @@ void loop()
                 Serial.print(" ");
                 Serial.print((uint16_t)(SCAN_WIDTH_DOT - line_index), HEX);
                 Serial.print(" ");
-                Serial.print((uint8_t)0x55, HEX);
+                Serial.print((uint16_t)line_no, HEX);
                 Serial.print(" ");
                 Serial.print(pos, HEX);
                 Serial.println();
             }
+            line_no = (line_no + 1) & 0xfff;
         }
     }
 }
