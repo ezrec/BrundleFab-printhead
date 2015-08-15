@@ -66,7 +66,8 @@ INKSHIELD_CLASS ink(INKSHIELD_PULSE);
 #define SCAN_WIDTH_ENC 	(SCAN_WIDTH_CI * 600 / 100)
 #define SCAN_WIDTH_DOT  (SCAN_WIDTH_CI * 96 / 100)
 
-#define SCAN_VEL_MAX	((float)SCAN_WIDTH_DOT / SCAN_WIDTH_MM)
+                        /* mm/ms max */
+#define SCAN_VEL_MAX	((float)SCAN_WIDTH_DOT / 2 / SCAN_WIDTH_MM)
 
 /* NOTE: This encoder is 600DPI */
 Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
