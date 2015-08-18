@@ -47,6 +47,7 @@
  */
 
 #include "pinout.h"
+#include "dotline.h"
 
 #include <Encoder.h>
 
@@ -77,65 +78,6 @@ Axis_DCEncoder motor = Axis_DCEncoder(&dcmotor, MOTOR_PWM_MIN, MOTOR_PWM_MAX,
                                       -1, -1,
 				      SCAN_VEL_MAX);
 
-/*
- * This can get a bit confusing, with how the bits are packed:
- *
- *  |B A 9 8 7 6 5 4|3 2 1 0-B A 9 8|7 6 5 4 3 2 1 0|....
- *  | even-hi       |even-lo;odd-hi |   odd-lo      |
- *
- * So, if a position is even:
- *
- * bits = ((buff[pos/2*3]<<8) | (buff[pos/2*3+1])) >> 4)
- *
- * And if it is odd:
- *
- * bits = ((buff[pos/2*3+1]<<8) | (buff[pos/2*3+2])) & 0x3ff
- */
-
-#define BUFFER_POS(x)	  (((x) / 2 * 3) + ((x)&1))
-#define BUFFER_SHIFT(x)   (((x) & 1) ? 0 : 4)
-
-uint16_t line_index;
-uint16_t line_total;
-uint8_t line_buffer[BUFFER_POS(SCAN_WIDTH_DOT)+1];
-
-static inline void line_reset(void)
-{
-    line_index = line_total = 0;
-}
-
-static inline uint16_t line_get(uint16_t pos)
-{
-    uint16_t i = BUFFER_POS(pos);
-    uint16_t line;
-
-    if (pos > line_total)
-        return 0;
-
-    line = ((uint16_t)line_buffer[i] << 8) | line_buffer[i+1];
-    line >>= BUFFER_SHIFT(pos);
-
-    return line & 0xfff;
-}
-
-static inline void line_set(uint16_t pos, uint16_t line)
-{
-    uint16_t i = BUFFER_POS(pos);
-    uint16_t mask = 0xfff;
-
-    if (pos > SCAN_WIDTH_DOT)
-        return;
-
-    line <<= BUFFER_SHIFT(pos);
-    mask <<= BUFFER_SHIFT(pos);
-
-    line_buffer[i+0] &= ~((mask>>8) & 0xff);
-    line_buffer[i+0] |= (line>>8);
-
-    line_buffer[i+1] &= ~((mask>>0) & 0xff);
-    line_buffer[i+1] |= (line>>0);
-}
-
 static enum {
     STATE_BOGUS,        /* Out of sync */
     STATE_IDLE,         /* No spray, no move */
@@ -148,6 +90,9 @@ static enum {
 
 static uint8_t status;
 
+uint16_t line_total;
+uint8_t dotline_buffer[DOTLINE_SIZE(SCAN_WIDTH_DOT)];
+
 /* Next response character */
 
 void setup(void)
@@ -158,7 +103,7 @@ void setup(void)
         pinMode(ENCODER_B, INPUT_PULLUP);
 
         state = STATE_BOGUS;
-        line_index = 0;
+        dotline_reset(SCAN_WIDTH_DOT);
         line_total = 0;
 }
 
@@ -169,7 +114,7 @@ void update_ink(void)
         /* Convert from mm to dotline */
         int32_t pos = motor.position_get() / 25.4 * 96.0;
 
-        ink.spray_ink(line_get(pos));
+        ink.spray_ink(dotline_get(pos));
     }
 }
 
@@ -211,7 +156,7 @@ void inkto(uint16_t line_target)
 
 void home(void)
 {
-    line_index = 0;
+    dotline_reset(SCAN_WIDTH_DOT);
     line_total = 0;
 
     motor.home();
@@ -257,18 +202,12 @@ void loop()
             case 'l':
 		if (line_total >= SCAN_WIDTH_DOT)
 			break;
-                line_total++;
-                line_set(line_index++, arg & 0xfff);
+                dotline_set(line_total++, arg & 0xfff);
                 break;
             case 'r':
-		if (line_total >= SCAN_WIDTH_DOT)
-			break;
-                line_total+= (arg & 0x7fff);
-		if (line_total > SCAN_WIDTH_DOT)
-			line_total = SCAN_WIDTH_DOT;
-                arg = (line_index > 0) ? line_get(line_index-1) : 0;
-                while (line_index < line_total)
-                        line_set(line_index++, arg);
+                line_total += dotline_set_range(line_total, arg,
+                                (line_total > 0) ?
+                                        dotline_get(line_total-1) : 0);
                 break;
             case 'h':
                 home();
@@ -280,8 +219,8 @@ void loop()
                 inkto(0);
                 break;
 	    case 'k':
-		line_total=0;
-		line_index=0;
+	        dotline_reset(SCAN_WIDTH_DOT);
+	        line_total = 0;
 		motor.motor_enable(false);
 		break;
 	    case 'n':
