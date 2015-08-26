@@ -21,6 +21,7 @@
 #include <AMSMotor.h>
 #include <Encoder.h>
 
+#include "timecmp.h"
 #include "Axis.h"
 
 class Axis_DCEncoder : public Axis {
@@ -226,7 +227,7 @@ if (DEBUG) {
                 _mode = HOMING_STALL_QUIESCE;
                 break;
             case HOMING_STALL_QUIESCE:
-                if (ms_now >= _homing.timeout) {
+                if (time_after_eq(ms_now, _homing.timeout)) {
                     if (_encoder->read() == _homing.position) {
                         _motor->setSpeed(0);
                         _motor->run(RELEASE);
@@ -238,7 +239,7 @@ if (DEBUG) {
                 }
                 break;
             case HOMING_STALL_BACKOFF:
-                if (ms_now >= _homing.timeout) {
+                if (time_after_eq(ms_now, _homing.timeout)) {
                     _motor->setSpeed(_homing.pwm);
                     _encoder->write(_homing.home);
                     _mode = MOVING;
@@ -256,7 +257,7 @@ if (DEBUG) {
                 }
                 break;
             case HOMING_STOP_QUIESCE:
-                if (ms_now >= _homing.timeout) {
+                if (time_after_eq(ms_now, _homing.timeout)) {
                     _mode = HOMING_STOP_BACKOFF;
                     _motor->run(RELEASE);
                     _motor->setSpeed(_pwmMinimum);
@@ -267,7 +268,7 @@ if (DEBUG) {
                 }
                 break;
             case HOMING_STOP_BACKOFF:
-                if (ms_now >= _homing.timeout) {
+                if (time_after_eq(ms_now, _homing.timeout)) {
                     if (digitalRead(_homing.pin) == 1) {
                         if (_homing.pwm < _pwmMaximum)
                             _homing.pwm++;
@@ -308,7 +309,7 @@ if (DEBUG) {
                     break;
                 }
 
-                if (ms_now > (_stall.ms+250)) {
+                if (time_after(ms_now, _stall.ms+250)) {
                     /* Stalled? */
                     if (pos == _stall.pos) {
                         _mode = IDLE;
@@ -319,8 +320,8 @@ if (DEBUG) {
                     _stall.pos = pos;
                 }
 
-                if (ms_now > (_last.ms+3) && _target.velocity > 0.0) {
-                    float velocity = fabs((_pos2mm(pos) - _pos2mm(_last.pos)) / (ms_now - _last.ms));
+                if (time_after(ms_now, _last.ms+3) && _target.velocity > 0.0) {
+                    float velocity = fabs((_pos2mm(pos) - _pos2mm(_last.pos)) / time_diff(_last.ms, ms_now));
 
 if (DEBUG) {
     Serial.print(" vel:");Serial.print(velocity*100);Serial.print("::");

@@ -107,6 +107,7 @@ void setup(void)
         line_total = 0;
 }
 
+/* Call no more than once per ms! */
 void update_ink(void)
 {
     /* Sprayer on? */
@@ -171,13 +172,12 @@ int line_no;
 void loop()
 {
     unsigned long now = millis();
-    if (now <= next_time)
-        return;
-    next_time  = now + 1;
 
-    update_ink();
-
-    update_motor(now);
+    if (time_after(now, next_time)) {
+        next_time = now + 1;
+        update_ink();
+        update_motor(now);
+    }
 
     if (Serial.available()) {
         uint8_t c = Serial.read();
