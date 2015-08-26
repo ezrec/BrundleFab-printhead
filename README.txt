@@ -41,11 +41,11 @@ Command is a newline termininated string, of the form:
 
 Status report response to a command:
 
-=> "ok SS I NNN LL MMM\n"
+=> "ok SS I NNN LL MMM\n" - ? command
 
-or
+=> "ok\n" - all other commands
 
-==> "!!\n"
+==> "!!\n" - error
 
   SS:
      Bit 0 - Motor on

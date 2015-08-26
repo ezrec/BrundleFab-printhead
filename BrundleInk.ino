@@ -193,11 +193,14 @@ void loop()
             arg = 0;
         } else {
             const char *ok = "ok ";
+            bool wants_status = false;
+
             switch (cmd) {
             case 0:
                 ok = NULL;
                 break;
             case '?':
+                wants_status = true;
                 break;
             case 'l':
 		if (line_total >= SCAN_WIDTH_DOT)
@@ -238,15 +241,17 @@ void loop()
 		if (pos < 0)
 		    pos = 0;
                 Serial.print(ok);
-                Serial.print(status, HEX);
-                Serial.print(" ");
-                Serial.print(sprays, HEX);
-                Serial.print(" ");
-                Serial.print((uint16_t)(SCAN_WIDTH_DOT - line_index), HEX);
-                Serial.print(" ");
-                Serial.print((uint16_t)line_no, HEX);
-                Serial.print(" ");
-                Serial.print(pos, HEX);
+                if (wants_status) {
+                    Serial.print(status, HEX);
+                    Serial.print(" ");
+                    Serial.print(sprays, HEX);
+                    Serial.print(" ");
+                    Serial.print((uint16_t)(SCAN_WIDTH_DOT - line_total), HEX);
+                    Serial.print(" ");
+                    Serial.print((uint16_t)line_no, HEX);
+                    Serial.print(" ");
+                    Serial.print(pos, HEX);
+                }
                 Serial.println();
             }
             line_no = (line_no + 1) & 0xfff;
