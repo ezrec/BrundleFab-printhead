@@ -9,9 +9,9 @@ Pinout:
 
   0     RX
   1     TX
-  2     Encoder A
-  3     Encoder B
-  4     --
+  2     --
+  3     Encoder A
+  4     Encoder B
   5     INK_PULSE
   6     --
   7     --
@@ -27,8 +27,8 @@ Pinout:
   A2    INK_C
   A3    INK_D
 
-  A4    HEATER_TEMP     (thermistor)
-  A5    Ink Tank sensor (TODO)
+  A4    I2C SDA
+  A5    I2C SCL
 
 Serial commands:
 ----------------
@@ -41,7 +41,7 @@ Command is a newline termininated string, of the form:
 
 Status report response to a command:
 
-=> "ok SS I NNN LL MMM\n" - ? command
+=> "ok SS I NNN LL MMM KKK\n" - ? command
 
 => "ok\n" - all other commands
 
@@ -68,6 +68,9 @@ Status report response to a command:
 
   MMM:
      Dotline position
+
+  KKK:
+     Thermopile reading in tenths of degrees of kelvin
 
 Commands:
 

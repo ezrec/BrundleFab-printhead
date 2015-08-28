@@ -61,6 +61,7 @@
 AMS_DCMotor dcmotor = AMS_DCMotor(MOTOR_SELECT);
 Encoder encoder = Encoder(ENCODER_A, ENCODER_B);
 INKSHIELD_CLASS ink(INKSHIELD_PULSE);
+BED_THERMOMETER(bed_temp);
 
 #define SCAN_WIDTH_CI	875L	/* 8.75" in ceniinches */
 #define SCAN_WIDTH_MM	((float)SCAN_WIDTH_CI * 0.254)
@@ -177,6 +178,7 @@ void loop()
         next_time = now + 1;
         update_ink();
         update_motor(now);
+        bed_temp.update(now);
     }
 
     if (Serial.available()) {
@@ -251,6 +253,8 @@ void loop()
                     Serial.print((uint16_t)line_no, HEX);
                     Serial.print(" ");
                     Serial.print(pos, HEX);
+                    Serial.print(" ");
+                    Serial.print((uint16_t)(bed_temp.kelvin()*10), HEX);
                 }
                 Serial.println();
             }

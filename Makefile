@@ -18,6 +18,7 @@ CXXFLAGS = -Wno-deprecated-declarations -g3
 MONITOR_BAUDRATE = 115200
 
 ARDUINO_LIBS = \
+	       Wire \
 	       Encoder \
 	       InkShield
 
